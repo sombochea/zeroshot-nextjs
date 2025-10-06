@@ -47,5 +47,14 @@ jobs:
                   key: ${{ secrets.SSH_PRIVATE_KEY }}
                   script: |
                       cd ~/apps/zeroshot-nextjs
-                      pnpm install --prod
-                      pm2 start pnpm --name "zeroshot-nextjs" -- start || pm2 restart zeroshot-nextjs
+                      # Install only production dependencies (respect lockfile for deterministic installs)
+                      pnpm install --prod --frozen-lockfile
+                      # Reload if the process exists, otherwise start a new one. This avoids spawning a second
+                      # instance that would conflict on the same port.
+                      if pm2 describe zeroshot-nextjs > /dev/null; then
+                        pm2 reload zeroshot-nextjs --update-env
+                      else
+                        pm2 start pnpm --name zeroshot-nextjs -- start
+                      fi
+                      # Persist current process list (optional, helps after server reboot if pm2 resurrect is used)
+                      pm2 save || true
