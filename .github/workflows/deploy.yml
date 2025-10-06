@@ -1,0 +1,52 @@
+name: Deploy to VPS
+
+on:
+    push:
+        branches:
+            - main
+
+jobs:
+    build-and-deploy:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v5
+
+            - uses: pnpm/action-setup@v4
+              name: Install pnpm
+              with:
+                  version: 10
+                  run_install: false
+
+            - name: Install Node.JS
+              uses: actions/setup-node@v5
+              with:
+                  node-version: 22
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install
+
+            - name: Build the app
+              run: pnpm run build
+
+            - name: Copy project to VPS
+              uses: appleboy/scp-action@v1
+              with:
+                  host: ${{ secrets.SSH_HOST }}
+                  username: root
+                  key: ${{ secrets.SSH_PRIVATE_KEY }}
+                  source: ".next,public,package.json,pnpm-lock.yaml"
+                  target: "~/apps/zeroshot-nextjs"
+
+            - name: SSH and restart app
+              uses: appleboy/ssh-action@v1
+              with:
+                  host: ${{ secrets.SSH_HOST }}
+                  username: root
+                  key: ${{ secrets.SSH_PRIVATE_KEY }}
+                  script: |
+                      cd ~/apps/zeroshot-nextjs
+                      pnpm install --prod
+                      pm2 start pnpm --name "zeroshot-nextjs" -- start || pm2 restart zeroshot-nextjs
